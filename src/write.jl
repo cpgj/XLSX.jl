@@ -394,7 +394,8 @@ function target_cell_ref_from_offset(anchor_cell::CellRef, offset::Integer, dim:
 end
 
 """
-    writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"), keep_style=false)
+    writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"), keep_style=false,
+    set_style::Union{Nothing, CellRange}=nothing)
 
 Writes tabular data `data` with labels given by `columnnames` to `sheet`,
 starting at `anchor_cell`.
@@ -409,9 +410,19 @@ from the underlying cells, as that would be counter to the point of writing the 
 true may result in slow writes for large datasets, as each cell's existing values must be checked. The default value
 of `keep_style` is false.
 
+`set_style`, if fed a CellRange that matches the number of columns, replicates the style of those cell ranges down
+through the rows of the table (but not in the column labels). Either keep_style can be true, or set_style can
+contain a CellRange, but not both.
+
 See also: [`XLSX.writetable`](@ref).
 """
-function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"), keep_style=false)
+function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"), keep_style=false,
+    set_style::Union{Nothing, CellRange}=nothing)
+
+    if keep_style == true && !(isnothing(set_style))
+        throw(ArgumentError(string("keep_style can be true, or set_style can ",
+            "contain a range, but not both.")))
+    end
 
     # read dimensions
     col_count = length(data)
@@ -422,6 +433,11 @@ function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=C
         for c in 2:col_count
             @assert length(data[c]) == row_count "Row count mismatch between column 1 ($row_count rows) and column $c ($(length(data[c])) rows)."
         end
+    end
+    if !(isnothing(set_style))
+        style_size = size(set_style)
+        @assert style_size[2] == col_count "Column count mismatch between the `set_style` range ($(style_size[2]) columns) and `data` ($col_count columns)."
+        @assert style_size[1] == 1 "The `set_style` range must be exactly one row."
     end
 
     anchor_row = row_number(anchor_cell)
@@ -448,6 +464,8 @@ function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=C
             # Here we wrap data[c][r] in a CellValue with CellDataFormat(0) --
             # we just want to keep the original style anyway
             setdata_keep_style!(sheet, target_cell_ref, CellValue(data[c][r], CellDataFormat(0)))
+        elseif !isnothing(set_style)
+            setdata_keep_style!(sheet, target_cell_ref, CellValue(data[c][r], CellRef(set_style[c])))
         else
             sheet[target_cell_ref] = data[c][r]
         end

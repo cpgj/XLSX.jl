@@ -1228,7 +1228,7 @@ end
         check_test_data(data, report_2_data)
     end
 
-    @testset "basic formatting" begin
+    @testset "keep_style=true" begin
         XLSX.openxlsx(joinpath(data_directory, "formatted_writable.xlsx"), mode="rw") do xf
             sheet = xf["Sheet1"]
             range_desc="B5:F6"
@@ -1257,6 +1257,58 @@ end
             @test sheet[XLSX.CellRef("D6")] == 440.0
             @test sheet[XLSX.CellRef("E6")] == 250.0
             @test sheet[XLSX.CellRef("F6")] == 0.5
+
+        end
+    end
+
+    @testset "set style" begin
+        XLSX.openxlsx(joinpath(data_directory, "formatted_writable.xlsx"), mode="rw") do xf
+            sheet = xf["Sheet1"]
+            range_desc="A5:F9"
+            style_range="A6:F6"
+            orig_range = XLSX.getcellrange(sheet, range_desc)
+            new_df = DataFrames.DataFrame("2021 YTD \$" => [750, 500, 600, 400],
+                "2020 YTD \$" => [500, 640, 720, 800],
+                "2019 YTD \$" => [440, 470, 500, 310])
+            new_df[!, "\$ CHG"] .= new_df."2021 YTD \$" .- new_df."2020 YTD \$"
+            new_df[!, "% CHG"] .= new_df."\$ CHG" ./ new_df."2020 YTD \$"
+            XLSX.writetable!(sheet, collect(eachcol(new_df)), names(new_df);
+                anchor_cell=XLSX.CellRef(range_desc[1:2]),
+                set_style=XLSX.CellRange(style_range))
+            new_range = XLSX.getcellrange(sheet, range_desc)
+
+            for (i, c) in enumerate(XLSX.CellRange(range_desc))
+                @test orig_range[i].datatype == new_range[i].datatype
+                @test orig_range[i].style == new_range[i].style
+                @test new_range[i].formula == ""
+            end
+
+            @test sheet[XLSX.CellRef("B5")] == "2021 YTD \$"
+            @test sheet[XLSX.CellRef("C5")] == "2020 YTD \$"
+            @test sheet[XLSX.CellRef("D5")] == "2019 YTD \$"
+            @test sheet[XLSX.CellRef("E5")] == "\$ CHG"
+            @test sheet[XLSX.CellRef("F5")] == "% CHG"
+            @test sheet[XLSX.CellRef("B6")] == 750.0
+            @test sheet[XLSX.CellRef("C6")] == 500.0
+            @test sheet[XLSX.CellRef("D6")] == 440.0
+            @test sheet[XLSX.CellRef("E6")] == 250.0
+            @test sheet[XLSX.CellRef("F6")] == 0.5
+            @test sheet[XLSX.CellRef("B7")] == 500.0
+            @test sheet[XLSX.CellRef("C7")] == 640.0
+            @test sheet[XLSX.CellRef("D7")] == 470.0
+            @test sheet[XLSX.CellRef("E7")] == -140.0
+            @test sheet[XLSX.CellRef("F7")] == -0.21875
+            @test sheet[XLSX.CellRef("B8")] == 600.0
+            @test sheet[XLSX.CellRef("C8")] == 500.0
+            @test sheet[XLSX.CellRef("D8")] == 500.0
+            @test sheet[XLSX.CellRef("E8")] == 100.0
+            @test sheet[XLSX.CellRef("F8")] == 0.2
+            @test sheet[XLSX.CellRef("B9")] == 400.0
+            @test sheet[XLSX.CellRef("C9")] == 800.0
+            @test sheet[XLSX.CellRef("D9")] == 310.0
+            @test sheet[XLSX.CellRef("E9")] == -400.0
+            @test sheet[XLSX.CellRef("F9")] == -0.5
+
 
         end
     end
