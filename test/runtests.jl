@@ -1242,8 +1242,8 @@ end
             new_range = XLSX.getcellrange(sheet, range_desc)
 
             for (i, c) in enumerate(new_range)
-                @test orig_range[i].datatype == c.datatype
-                @test orig_range[i].style == c.style
+                @test c.datatype == orig_range[i].datatype
+                @test c.style == orig_range[i].style
                 @test new_range[i].formula == ""
             end
 
@@ -1277,6 +1277,7 @@ end
                 set_style=XLSX.CellRange(style_range), keep_style=true)
             new_range = XLSX.getcellrange(sheet, range_desc)
 
+            n_rows = XLSX.size(XLSX.CellRange(range_desc))[1]
             n_columns = XLSX.size(XLSX.CellRange(style_range))[2]
             style_row =
                 XLSX.row_number(XLSX.CellRange(style_range).start)
@@ -1285,16 +1286,33 @@ end
 
             for (i, c) in enumerate(new_range)
                 if XLSX.row_number(c) <= style_row
-                    @test orig_range[i].datatype == c.datatype
+                    @test c.datatype == orig_range[i].datatype
+                    @test c.style == orig_range[i].style
                 else
-                    this_offset = i % n_columns
+                    this_offset = div(i-1, n_rows)
+                    #=
+                    @show c
+                    @show i
+                    @show n_columns
+                    @show n_rows
+                    @show style_row
+                    @show style_start_col
+                    @show this_offset
+                    @show (style_start_col + this_offset)
+                    =#
                     check_cell = CellRef("", style_row,
                         style_start_col + this_offset)
-                    @test new_range[i].datatype ==
+                    #=
+                    @show check_cell
+                    @show XLSX.getcell(sheet, check_cell)
+                    =#
+                    @test c.datatype ==
                         XLSX.getcell(sheet, check_cell).datatype
+                    @test c.style ==
+                        XLSX.getcell(sheet, check_cell).style
                 end
-                @test_skip orig_range[i].style == new_range[i].style
-                @test_skip new_range[i].formula == ""
+                #@test_skip orig_range[i].style == new_range[i].style
+                @test new_range[i].formula == ""
             end
 
             @test sheet[XLSX.CellRef("B5")] == "2021 YTD \$"
@@ -1334,9 +1352,9 @@ end
     # Overwrite the test files to reset for the next run
     cp(joinpath(data_directory, "formatted_writable_original.xlsx"),
         joinpath(data_directory, "formatted_writable.xlsx"), force=true)
-    cp(joinpath(data_directory, "formatted_writable_set_style_original.xlsx"),
-        joinpath(data_directory, "formatted_writable_set_style.xlsx"),
-        force=true)
+    #cp(joinpath(data_directory, "formatted_writable_set_style_original.xlsx"),
+    #    joinpath(data_directory, "formatted_writable_set_style.xlsx"),
+    #    force=true)
 end
 
 @testset "Styles" begin
