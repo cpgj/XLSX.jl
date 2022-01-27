@@ -378,13 +378,28 @@ end
 
 """setdata_keep_style!(ws::Worksheet, ref::CellRef, val::CellValue)
 
-Set the data in `ws` cell `ref` to `value`, retaining the style that was assigned
+Set the data in `ws` cell `ref` to `val`, retaining the style that was assigned
 to cell `ref` previously.
 """
 function setdata_keep_style!(ws::Worksheet, ref::CellRef, val::CellValue)
     t, v = xlsx_encode(ws, val.value)
     orig_style = getcell(ws, ref).style
     cell = Cell(ref, t, orig_style, v, "")
+
+    setdata!(ws, cell)
+end
+
+"""setdata_set_style!(ws::Worksheet, ref::CellRef, val::CellValue,
+    style_cell::CellRef)
+
+Set the data in `ws` cell `ref` to `val`, assigning the style that is assigned
+to cell `style_cell`.
+"""
+function setdata_set_style!(ws::Worksheet, ref::CellRef, val::CellValue,
+        style_cell::CellRef)
+    t, v = xlsx_encode(ws, val.value)
+    style_setting = getcell(ws, style_cell).style
+    cell = Cell(ref, t, style_setting, v, "")
 
     setdata!(ws, cell)
 end
@@ -411,18 +426,13 @@ true may result in slow writes for large datasets, as each cell's existing value
 of `keep_style` is false.
 
 `set_style`, if fed a CellRange that matches the number of columns, replicates the style of those cell ranges down
-through the rows of the table (but not in the column labels). Either keep_style can be true, or set_style can
-contain a CellRange, but not both.
+through the rows of the table (but not in the column labels). To keep the style of the column labels with
+`set_style`, set `keep_style` to true and pass `set_style` normally.
 
 See also: [`XLSX.writetable`](@ref).
 """
 function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"), keep_style=false,
     set_style::Union{Nothing, CellRange}=nothing)
-
-    if keep_style == true && !(isnothing(set_style))
-        throw(ArgumentError(string("keep_style can be true, or set_style can ",
-            "contain a range, but not both.")))
-    end
 
     # read dimensions
     col_count = length(data)
@@ -450,7 +460,8 @@ function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=C
             # Change the value, keep the style
             # Here we wrap string(columnames[c]) in a CellValue with CellDataFormat(0) --
             # we just want to keep the original style anyway
-            setdata_keep_style!(sheet, target_cell_ref, CellValue(string(columnnames[c]), CellDataFormat(0)))
+            setdata_keep_style!(sheet, target_cell_ref,
+                CellValue(string(columnnames[c]), CellDataFormat(0)))
         else
            sheet[target_cell_ref] = string(columnnames[c])
         end
@@ -459,13 +470,18 @@ function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=C
     # write table data
     for r in 1:row_count, c in 1:col_count
         target_cell_ref = CellRef(r + anchor_row, c + anchor_col - 1)
-        if keep_style
+        if !isnothing(set_style)
+            style_row = XLSX.row_number(set_style.start)
+            style_start = XLSX.column_number(set_style.start)
+            setdata_set_style!(sheet, target_cell_ref,
+                CellValue(data[c][r], CellDataFormat(0)), # dummy formatting
+                CellRef("", style_row, style_start+c-1))
+        elseif keep_style
             # Change the value, keep the style
             # Here we wrap data[c][r] in a CellValue with CellDataFormat(0) --
             # we just want to keep the original style anyway
-            setdata_keep_style!(sheet, target_cell_ref, CellValue(data[c][r], CellDataFormat(0)))
-        elseif !isnothing(set_style)
-            setdata_keep_style!(sheet, target_cell_ref, CellValue(data[c][r], CellRef(set_style[c])))
+            setdata_keep_style!(sheet, target_cell_ref, CellValue(data[c][r],
+                CellDataFormat(0)))
         else
             sheet[target_cell_ref] = data[c][r]
         end
