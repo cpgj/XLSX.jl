@@ -1241,9 +1241,9 @@ end
                 anchor_cell=XLSX.CellRef(range_desc[1:2]), keep_style=true)
             new_range = XLSX.getcellrange(sheet, range_desc)
 
-            for (i, c) in enumerate(XLSX.CellRange(range_desc))
-                @test orig_range[i].datatype == new_range[i].datatype
-                @test orig_range[i].style == new_range[i].style
+            for (i, c) in enumerate(new_range)
+                @test orig_range[i].datatype == c.datatype
+                @test orig_range[i].style == c.style
                 @test new_range[i].formula == ""
             end
 
@@ -1266,7 +1266,7 @@ end
             sheet = xf["Sheet1"]
             range_desc="B5:F9"
             style_range="B6:F6"
-            orig_range = XLSX.getcellrange(sheet, range_desc)
+            orig_range = copy(XLSX.getcellrange(sheet, range_desc))
             new_df = DataFrames.DataFrame("2021 YTD \$" => [750, 500, 600, 400],
                 "2020 YTD \$" => [500, 640, 500, 800],
                 "2019 YTD \$" => [440, 470, 450, 310])
@@ -1277,8 +1277,22 @@ end
                 set_style=XLSX.CellRange(style_range), keep_style=true)
             new_range = XLSX.getcellrange(sheet, range_desc)
 
-            for (i, c) in enumerate(XLSX.CellRange(range_desc))
-                @test_skip orig_range[i].datatype == new_range[i].datatype
+            n_columns = XLSX.size(XLSX.CellRange(style_range))[2]
+            style_row =
+                XLSX.row_number(XLSX.CellRange(style_range).start)
+            style_start_col =
+                XLSX.column_number(XLSX.CellRange(style_range).start)
+
+            for (i, c) in enumerate(new_range)
+                if XLSX.row_number(c) <= style_row
+                    @test orig_range[i].datatype == c.datatype
+                else
+                    this_offset = i % n_columns
+                    check_cell = CellRef("", style_row,
+                        style_start_col + this_offset)
+                    @test new_range[i].datatype ==
+                        XLSX.getcell(sheet, check_cell).datatype
+                end
                 @test_skip orig_range[i].style == new_range[i].style
                 @test_skip new_range[i].formula == ""
             end
